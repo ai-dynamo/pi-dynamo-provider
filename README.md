@@ -25,26 +25,33 @@ The extension also injects Dynamo agent-context metadata on every LLM request an
 
 Request and tool data flow:
 
-```text
-Pi
-  |
-  |  OpenAI-compatible /v1/chat/completions
-  |  + nvext.agent_context
-  |  + x-request-id
-  v
-Dynamo frontend
-  |
-  v
-Dynamo agent trace sink
+```mermaid
+sequenceDiagram
+    participant Pi
+    participant Provider as pi-dynamo-provider
+    participant Dynamo as Dynamo frontend
+    participant Worker as Dynamo worker
+    participant ToolIngest as Dynamo tool-event ingest
+    participant Trace as Dynamo agent trace sink
 
-Pi tool events
-  |
-  |  ZMQ PUB: [topic, seq_be_u64, msgpack(AgentTraceRecord)]
-  v
-Dynamo tool-event ingest
-  |
-  v
-Dynamo agent trace sink
+    Pi->>Provider: streamSimple(model, context, options)
+    Provider->>Provider: Build agent_context and x-request-id
+    Provider->>Dynamo: POST /v1/chat/completions<br/>nvext.agent_context
+    Dynamo->>Worker: Route request and generate
+    Worker-->>Dynamo: Stream tokens and metrics
+    Dynamo->>Trace: request_end<br/>timing, tokens, cache, agent_context, x_request_id
+    Dynamo-->>Provider: SSE chunks
+    Provider-->>Pi: Assistant event stream
+
+    Pi->>Provider: tool_execution_start
+    Provider->>ToolIngest: ZMQ PUB tool_start<br/>[topic, seq_be_u64, msgpack(record)]
+    ToolIngest->>Trace: tool_start
+
+    Pi->>Provider: tool_execution_end
+    Provider->>ToolIngest: ZMQ PUB tool_end or tool_error<br/>[topic, seq_be_u64, msgpack(record)]
+    ToolIngest->>Trace: tool_end or tool_error
+
+    Note over Trace: Dynamo's Perfetto converter renders LLM spans and Pi tool spans from the same trace.
 ```
 
 ## Install
