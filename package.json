@@ -1,0 +1,54 @@
+{
+	"name": "pi-dynamo-provider",
+	"version": "0.1.0",
+	"description": "Pi extension package that registers a Dynamo OpenAI-compatible provider with agent-context tracing metadata.",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"src",
+		"README.md"
+	],
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"dynamo",
+		"openai-compatible"
+	],
+	"license": "MIT",
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"check": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"pi": {
+		"extensions": [
+			"./src/index.ts"
+		]
+	},
+	"peerDependencies": {
+		"@mariozechner/pi-ai": "*",
+		"@mariozechner/pi-coding-agent": "*"
+	},
+	"devDependencies": {
+		"@mariozechner/pi-ai": "0.72.1",
+		"@mariozechner/pi-coding-agent": "0.72.1",
+		"@types/node": "^24.10.1",
+		"typescript": "^5.9.3",
+		"vitest": "^3.2.4"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"dependencies": {
+		"@msgpack/msgpack": "^3.1.3",
+		"zeromq": "^6.5.0"
+	}
+}
