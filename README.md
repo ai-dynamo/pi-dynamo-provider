@@ -105,6 +105,62 @@ pi --model dynamo/<model-id> -p "Reply exactly ok."
 
 For local Dynamo, the API key is usually not checked. This package defaults to `dynamo-local` if `DYNAMO_API_KEY` is unset.
 
+## One-GPU Dynamo Launcher
+
+For local onboarding, this repo includes a single-GPU Dynamo launcher:
+
+```bash
+./scripts/run-dynamo-single-gpu.sh
+```
+
+The script:
+
+- clones Dynamo into `${XDG_CACHE_HOME:-$HOME/.cache}/pi-dynamo-provider/dynamo`;
+- checks out `ishan/mooncake-replay-hashes` by default;
+- creates `.venv` with `uv`;
+- builds Dynamo Python bindings with `maturin develop --uv`;
+- installs Dynamo with `uv pip install -e .`;
+- starts NATS if `nats-server` is installed and port `4222` is not already in use;
+- launches a single-GPU Dynamo frontend plus one SGLang worker;
+- enables Dynamo JSONL agent tracing and Pi tool-event ingest.
+
+After the model is ready, the script prints the exact Pi env vars to use from another shell.
+
+Common overrides:
+
+```bash
+# Pick a different single GPU.
+./scripts/run-dynamo-single-gpu.sh --gpu 1
+
+# Use a smaller model for smoke testing.
+./scripts/run-dynamo-single-gpu.sh --model Qwen/Qwen3-0.6B
+
+# Reuse an existing build.
+./scripts/run-dynamo-single-gpu.sh --skip-build
+
+# Forward extra flags to dynamo.sglang.
+./scripts/run-dynamo-single-gpu.sh -- --disable-cuda-graph
+```
+
+This wrapper intentionally stays single-GPU for now. For a two-GPU GLM run, use the Dynamo checkout it creates and run Dynamo's upstream agent launch script directly:
+
+```bash
+cd ${XDG_CACHE_HOME:-$HOME/.cache}/pi-dynamo-provider/dynamo
+source .venv/bin/activate
+
+export CUDA_VISIBLE_DEVICES=0,1
+export DYN_HTTP_PORT=18083
+export DYN_DISCOVERY_BACKEND=file
+export DYN_FILE_KV=/tmp/dynamo-file-kv
+export DYN_EVENT_PLANE=nats
+export NATS_SERVER=nats://127.0.0.1:4222
+export DYN_AGENT_TRACE_SINKS=jsonl
+export DYN_AGENT_TRACE_OUTPUT_PATH=/tmp/dynamo-agent-trace.jsonl
+export DYN_AGENT_TRACE_TOOL_EVENTS_ZMQ_ENDPOINT=tcp://127.0.0.1:20390
+
+bash examples/backends/sglang/launch/agg_agent.sh --tp 2
+```
+
 ## Dynamo Requirements
 
 Minimum:
