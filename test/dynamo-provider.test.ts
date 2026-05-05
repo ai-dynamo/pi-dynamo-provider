@@ -6,7 +6,7 @@ import {
 	createDynamoStreamSimple,
 	DEFAULT_DYNAMO_BASE_URL,
 	DEFAULT_DYNAMO_MODEL_ID,
-	DEFAULT_WORKFLOW_TYPE_ID,
+	DEFAULT_SESSION_TYPE_ID,
 	DYNAMO_API,
 	mergeDynamoAgentContext,
 	normalizeDynamoBaseUrl,
@@ -16,7 +16,7 @@ import {
 const config = {
 	baseUrl: DEFAULT_DYNAMO_BASE_URL,
 	apiKey: "test-key",
-	workflowTypeId: DEFAULT_WORKFLOW_TYPE_ID,
+	sessionTypeId: DEFAULT_SESSION_TYPE_ID,
 };
 
 const model = {
@@ -48,35 +48,35 @@ describe("dynamo provider config", () => {
 				OPENAI_BASE_URL: "http://ignored.test/v1",
 				DYNAMO_BASE_URL: "http://dynamo.test",
 				DYNAMO_API_KEY: "dyn-key",
-				DYN_AGENT_WORKFLOW_TYPE_ID: "workflow-kind",
-				DYN_AGENT_WORKFLOW_ID: "workflow-id",
-				DYN_AGENT_PROGRAM_ID: "program-id",
-				DYN_AGENT_PARENT_PROGRAM_ID: "parent-id",
+				DYN_AGENT_SESSION_TYPE_ID: "session-kind",
+				DYN_AGENT_SESSION_ID: "session-id",
+				DYN_AGENT_TRAJECTORY_ID: "trajectory-id",
+				DYN_AGENT_PARENT_TRAJECTORY_ID: "parent-id",
 			}),
 		).toEqual({
 			baseUrl: "http://dynamo.test/v1",
 			apiKey: "dyn-key",
-			workflowTypeId: "workflow-kind",
-			workflowId: "workflow-id",
-			programId: "program-id",
-			parentProgramId: "parent-id",
+			sessionTypeId: "session-kind",
+			sessionId: "session-id",
+			trajectoryId: "trajectory-id",
+			parentTrajectoryId: "parent-id",
 		});
 	});
 });
 
 describe("agent context injection", () => {
-	it("uses the Pi session ID as the default program ID", () => {
+	it("uses the Pi session ID as the default trajectory ID", () => {
 		expect(buildDynamoAgentContext(config, { sessionId: "pi-session" })).toEqual({
-			program_id: "pi-session",
-			workflow_type_id: DEFAULT_WORKFLOW_TYPE_ID,
+			trajectory_id: "pi-session",
+			session_type_id: DEFAULT_SESSION_TYPE_ID,
 			phase: "reasoning",
 		});
 	});
 
-	it("lets DYN_AGENT_PROGRAM_ID override the session ID default", () => {
-		expect(buildDynamoAgentContext({ ...config, programId: "program-from-env" }, { sessionId: "pi-session" })).toEqual({
-			program_id: "program-from-env",
-			workflow_type_id: DEFAULT_WORKFLOW_TYPE_ID,
+	it("lets DYN_AGENT_TRAJECTORY_ID override the session ID default", () => {
+		expect(buildDynamoAgentContext({ ...config, trajectoryId: "trajectory-from-env" }, { sessionId: "pi-session" })).toEqual({
+			trajectory_id: "trajectory-from-env",
+			session_type_id: DEFAULT_SESSION_TYPE_ID,
 			phase: "reasoning",
 		});
 	});
@@ -88,15 +88,15 @@ describe("agent context injection", () => {
 				nvext: {
 					extra_fields: ["worker_id", "timing"],
 					agent_context: {
-						workflow_id: "existing-workflow",
+						session_id: "existing-session",
 						custom_field: "kept",
 					},
 				},
 			},
 			{
-				program_id: "program",
-				workflow_id: "default-workflow",
-				workflow_type_id: DEFAULT_WORKFLOW_TYPE_ID,
+				trajectory_id: "trajectory",
+				session_id: "default-session",
+				session_type_id: DEFAULT_SESSION_TYPE_ID,
 				phase: "reasoning",
 			},
 		);
@@ -106,9 +106,9 @@ describe("agent context injection", () => {
 			nvext: {
 				extra_fields: ["worker_id", "timing"],
 				agent_context: {
-					program_id: "program",
-					workflow_id: "existing-workflow",
-					workflow_type_id: DEFAULT_WORKFLOW_TYPE_ID,
+					trajectory_id: "trajectory",
+					session_id: "existing-session",
+					session_type_id: DEFAULT_SESSION_TYPE_ID,
 					phase: "reasoning",
 					custom_field: "kept",
 				},
@@ -163,8 +163,8 @@ describe("streamSimple wrapper", () => {
 			model: "default",
 			nvext: {
 				agent_context: {
-					program_id: "pi-session",
-					workflow_type_id: DEFAULT_WORKFLOW_TYPE_ID,
+					trajectory_id: "pi-session",
+					session_type_id: DEFAULT_SESSION_TYPE_ID,
 					phase: "reasoning",
 				},
 			},

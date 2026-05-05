@@ -1,7 +1,7 @@
 import { decode } from "@msgpack/msgpack";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DYNAMO_BASE_URL, DEFAULT_WORKFLOW_TYPE_ID } from "../src/dynamo-provider.js";
+import { DEFAULT_DYNAMO_BASE_URL, DEFAULT_SESSION_TYPE_ID } from "../src/dynamo-provider.js";
 import {
 	buildDynamoTraceAgentContext,
 	DEFAULT_TOOL_EVENT_QUEUE_CAPACITY,
@@ -16,16 +16,16 @@ import {
 const config = {
 	baseUrl: DEFAULT_DYNAMO_BASE_URL,
 	apiKey: "test-key",
-	workflowTypeId: DEFAULT_WORKFLOW_TYPE_ID,
+	sessionTypeId: DEFAULT_SESSION_TYPE_ID,
 };
 
 class FakeToolEventSocket implements ToolEventSocket {
-	endpoint: string | undefined;
+	connectedEndpoint: string | undefined;
 	closed = false;
 	readonly sent: [Buffer, Buffer, Buffer][] = [];
 
-	async bind(endpoint: string): Promise<void> {
-		this.endpoint = endpoint;
+	async connect(endpoint: string): Promise<void> {
+		this.connectedEndpoint = endpoint;
 	}
 
 	async send(frames: [Buffer, Buffer, Buffer]): Promise<void> {
@@ -77,30 +77,30 @@ describe("tool relay config", () => {
 });
 
 describe("tool relay agent context", () => {
-	it("uses the Pi session ID as default program and workflow ID", () => {
+	it("uses the Pi session ID as default trajectory and session ID", () => {
 		expect(buildDynamoTraceAgentContext(config, "pi-session")).toEqual({
-			workflow_type_id: DEFAULT_WORKFLOW_TYPE_ID,
-			workflow_id: "pi-session",
-			program_id: "pi-session",
+			session_type_id: DEFAULT_SESSION_TYPE_ID,
+			session_id: "pi-session",
+			trajectory_id: "pi-session",
 		});
 	});
 
-	it("uses env workflow/program IDs when provided", () => {
+	it("uses env session/trajectory IDs when provided", () => {
 		expect(
 			buildDynamoTraceAgentContext(
 				{
 					...config,
-					workflowId: "workflow-1",
-					programId: "program-1",
-					parentProgramId: "parent-1",
+					sessionId: "session-1",
+					trajectoryId: "trajectory-1",
+					parentTrajectoryId: "parent-1",
 				},
 				"pi-session",
 			),
 		).toEqual({
-			workflow_type_id: DEFAULT_WORKFLOW_TYPE_ID,
-			workflow_id: "workflow-1",
-			program_id: "program-1",
-			parent_program_id: "parent-1",
+			session_type_id: DEFAULT_SESSION_TYPE_ID,
+			session_id: "session-1",
+			trajectory_id: "trajectory-1",
+			parent_trajectory_id: "parent-1",
 		});
 	});
 });
@@ -117,7 +117,7 @@ describe("tool relay records", () => {
 		let unixMs = 1000;
 		let perfMs = 10;
 		const relay = new DynamoToolEventRelay(
-			{ ...config, workflowId: "workflow-1" },
+			{ ...config, sessionId: "session-1" },
 			publisher,
 			() => unixMs,
 			() => perfMs,
@@ -129,7 +129,7 @@ describe("tool relay records", () => {
 		);
 		await publisher.flush();
 
-		expect(socket.endpoint).toBe("tcp://127.0.0.1:20390");
+		expect(socket.connectedEndpoint).toBe("tcp://127.0.0.1:20390");
 		expect(socket.sent).toHaveLength(1);
 		expect(socket.sent[0]?.[0].toString("utf8")).toBe("tools");
 		expect(socket.sent[0]?.[1].readBigUInt64BE()).toBe(0n);
@@ -139,9 +139,9 @@ describe("tool relay records", () => {
 			event_time_unix_ms: 1000,
 			event_source: "harness",
 			agent_context: {
-				workflow_type_id: DEFAULT_WORKFLOW_TYPE_ID,
-				workflow_id: "workflow-1",
-				program_id: "pi-session",
+				session_type_id: DEFAULT_SESSION_TYPE_ID,
+				session_id: "session-1",
+				trajectory_id: "pi-session",
 			},
 			tool: {
 				tool_call_id: "call-1",
@@ -172,9 +172,9 @@ describe("tool relay records", () => {
 			event_time_unix_ms: 1500,
 			event_source: "harness",
 			agent_context: {
-				workflow_type_id: DEFAULT_WORKFLOW_TYPE_ID,
-				workflow_id: "workflow-1",
-				program_id: "pi-session",
+				session_type_id: DEFAULT_SESSION_TYPE_ID,
+				session_id: "session-1",
+				trajectory_id: "pi-session",
 			},
 			tool: {
 				tool_call_id: "call-1",
@@ -214,9 +214,9 @@ describe("tool relay records", () => {
 			event_time_unix_ms: 2000,
 			event_source: "harness",
 			agent_context: {
-				workflow_type_id: DEFAULT_WORKFLOW_TYPE_ID,
-				workflow_id: "pi-session",
-				program_id: "pi-session",
+				session_type_id: DEFAULT_SESSION_TYPE_ID,
+				session_id: "pi-session",
+				trajectory_id: "pi-session",
 			},
 			tool: {
 				tool_call_id: "call-2",

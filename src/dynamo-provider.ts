@@ -14,33 +14,33 @@ export const DYNAMO_PROVIDER_ID = "dynamo";
 export const DYNAMO_API = "dynamo-openai-completions" satisfies Api;
 export const DEFAULT_DYNAMO_BASE_URL = "http://127.0.0.1:8000/v1";
 export const DEFAULT_DYNAMO_API_KEY = "dynamo-local";
-export const DEFAULT_WORKFLOW_TYPE_ID = "pi_coding_agent";
+export const DEFAULT_SESSION_TYPE_ID = "pi_coding_agent";
 export const DEFAULT_DYNAMO_MODEL_ID = "default";
 
 export interface DynamoEnvironment {
 	DYNAMO_BASE_URL?: string;
 	OPENAI_BASE_URL?: string;
 	DYNAMO_API_KEY?: string;
-	DYN_AGENT_WORKFLOW_TYPE_ID?: string;
-	DYN_AGENT_WORKFLOW_ID?: string;
-	DYN_AGENT_PROGRAM_ID?: string;
-	DYN_AGENT_PARENT_PROGRAM_ID?: string;
+	DYN_AGENT_SESSION_TYPE_ID?: string;
+	DYN_AGENT_SESSION_ID?: string;
+	DYN_AGENT_TRAJECTORY_ID?: string;
+	DYN_AGENT_PARENT_TRAJECTORY_ID?: string;
 }
 
 export interface DynamoProviderRuntimeConfig {
 	baseUrl: string;
 	apiKey: string;
-	workflowTypeId: string;
-	workflowId?: string;
-	programId?: string;
-	parentProgramId?: string;
+	sessionTypeId: string;
+	sessionId?: string;
+	trajectoryId?: string;
+	parentTrajectoryId?: string;
 }
 
 export interface DynamoAgentContext {
-	program_id?: string;
-	parent_program_id?: string;
-	workflow_id?: string;
-	workflow_type_id: string;
+	trajectory_id?: string;
+	parent_trajectory_id?: string;
+	session_id?: string;
+	session_type_id: string;
 	phase: "reasoning";
 }
 
@@ -80,17 +80,17 @@ export function normalizeDynamoBaseUrl(rawBaseUrl: string | undefined): string {
 }
 
 export function readDynamoConfig(env: DynamoEnvironment = process.env): DynamoProviderRuntimeConfig {
-	const workflowId = getEnvValue(env, "DYN_AGENT_WORKFLOW_ID");
-	const programId = getEnvValue(env, "DYN_AGENT_PROGRAM_ID");
-	const parentProgramId = getEnvValue(env, "DYN_AGENT_PARENT_PROGRAM_ID");
+	const sessionId = getEnvValue(env, "DYN_AGENT_SESSION_ID");
+	const trajectoryId = getEnvValue(env, "DYN_AGENT_TRAJECTORY_ID");
+	const parentTrajectoryId = getEnvValue(env, "DYN_AGENT_PARENT_TRAJECTORY_ID");
 
 	return {
 		baseUrl: normalizeDynamoBaseUrl(getEnvValue(env, "DYNAMO_BASE_URL") ?? getEnvValue(env, "OPENAI_BASE_URL")),
 		apiKey: getEnvValue(env, "DYNAMO_API_KEY") ?? DEFAULT_DYNAMO_API_KEY,
-		workflowTypeId: getEnvValue(env, "DYN_AGENT_WORKFLOW_TYPE_ID") ?? DEFAULT_WORKFLOW_TYPE_ID,
-		...(workflowId ? { workflowId } : {}),
-		...(programId ? { programId } : {}),
-		...(parentProgramId ? { parentProgramId } : {}),
+		sessionTypeId: getEnvValue(env, "DYN_AGENT_SESSION_TYPE_ID") ?? DEFAULT_SESSION_TYPE_ID,
+		...(sessionId ? { sessionId } : {}),
+		...(trajectoryId ? { trajectoryId } : {}),
+		...(parentTrajectoryId ? { parentTrajectoryId } : {}),
 	};
 }
 
@@ -98,12 +98,12 @@ export function buildDynamoAgentContext(
 	config: DynamoProviderRuntimeConfig,
 	options?: Pick<SimpleStreamOptions, "sessionId">,
 ): DynamoAgentContext {
-	const programId = config.programId ?? options?.sessionId;
+	const trajectoryId = config.trajectoryId ?? options?.sessionId;
 	return {
-		...(programId ? { program_id: programId } : {}),
-		...(config.parentProgramId ? { parent_program_id: config.parentProgramId } : {}),
-		...(config.workflowId ? { workflow_id: config.workflowId } : {}),
-		workflow_type_id: config.workflowTypeId,
+		...(trajectoryId ? { trajectory_id: trajectoryId } : {}),
+		...(config.parentTrajectoryId ? { parent_trajectory_id: config.parentTrajectoryId } : {}),
+		...(config.sessionId ? { session_id: config.sessionId } : {}),
+		session_type_id: config.sessionTypeId,
 		phase: "reasoning",
 	};
 }

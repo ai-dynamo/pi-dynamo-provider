@@ -17,7 +17,7 @@ The extension also injects Dynamo agent-context metadata on every LLM request an
 - Delegates chat-completion streaming to Pi's existing OpenAI-compatible provider.
 - Adds `nvext.agent_context` to each request payload.
 - Adds `x-request-id` when the request does not already have one.
-- Optionally publishes Pi tool events to Dynamo over ZMQ:
+- Optionally sends Pi tool events to Dynamo over ZMQ:
   - `tool_start`
   - `tool_end`
   - `tool_error`
@@ -44,11 +44,11 @@ sequenceDiagram
     Provider-->>Pi: Assistant event stream
 
     Pi->>Provider: tool_execution_start
-    Provider->>ToolIngest: ZMQ PUB tool_start<br/>[topic, seq_be_u64, msgpack(record)]
+    Provider->>ToolIngest: ZMQ PUSH tool_start<br/>[topic, seq_be_u64, msgpack(record)]
     ToolIngest->>Trace: tool_start
 
     Pi->>Provider: tool_execution_end
-    Provider->>ToolIngest: ZMQ PUB tool_end or tool_error<br/>[topic, seq_be_u64, msgpack(record)]
+    Provider->>ToolIngest: ZMQ PUSH tool_end or tool_error<br/>[topic, seq_be_u64, msgpack(record)]
     ToolIngest->>Trace: tool_end or tool_error
 
     Note over Trace: Dynamo's Perfetto converter renders LLM spans and Pi tool spans from the same trace.
@@ -182,8 +182,10 @@ For request tracing:
 For tool tracing:
 
 - Dynamo must include the tool-event ingest/relay support.
-- Dynamo and Pi must use the same ZMQ endpoint.
+- Dynamo binds the ZMQ PULL endpoint, and Pi connects a ZMQ PUSH socket to the same endpoint.
 - Pi must run with tools enabled and execute at least one tool.
+
+Dynamo owns the bind side so multiple Pi plugins, subagents, or tool worker processes can all connect as producers without competing to bind the same local endpoint.
 
 Equivalent manual Dynamo launch shape:
 
@@ -229,8 +231,8 @@ Then run Pi:
 export DYNAMO_BASE_URL=http://127.0.0.1:18083/v1
 export DYNAMO_API_KEY=dummy
 
-export DYN_AGENT_WORKFLOW_TYPE_ID=pi_coding_agent
-export DYN_AGENT_WORKFLOW_ID=pi-demo-001
+export DYN_AGENT_SESSION_TYPE_ID=pi_coding_agent
+export DYN_AGENT_SESSION_ID=pi-demo-001
 export DYN_AGENT_TOOL_EVENTS_ZMQ_ENDPOINT=tcp://127.0.0.1:20390
 
 pi --model dynamo/zai-org/GLM-4.7-Flash \
@@ -274,11 +276,11 @@ That fallback is useful for smoke tests against minimal OpenAI-compatible endpoi
 | `DYNAMO_BASE_URL` | `http://127.0.0.1:8000/v1` | Dynamo OpenAI-compatible endpoint root. |
 | `OPENAI_BASE_URL` | unset | Fallback endpoint root when `DYNAMO_BASE_URL` is unset. |
 | `DYNAMO_API_KEY` | `dynamo-local` | Bearer token sent to Dynamo. Local Dynamo usually accepts a dummy value. |
-| `DYN_AGENT_WORKFLOW_TYPE_ID` | `pi_coding_agent` | Stable workflow type used by Dynamo traces/profilers. |
-| `DYN_AGENT_WORKFLOW_ID` | unset | Workflow/run id. If unset for tool events, the Pi session id is used. |
-| `DYN_AGENT_PROGRAM_ID` | unset | Program id override. If unset, Pi's session id is used per request. |
-| `DYN_AGENT_PARENT_PROGRAM_ID` | unset | Optional parent program id for nested/subagent workflows. |
-| `DYN_AGENT_TOOL_EVENTS_ZMQ_ENDPOINT` | unset | ZMQ endpoint Pi binds and publishes tool events on. |
+| `DYN_AGENT_SESSION_TYPE_ID` | `pi_coding_agent` | Stable session type used by Dynamo traces/profilers. |
+| `DYN_AGENT_SESSION_ID` | unset | Session/run id. If unset for tool events, the Pi session id is used. |
+| `DYN_AGENT_TRAJECTORY_ID` | unset | Trajectory id override. If unset, Pi's session id is used per request. |
+| `DYN_AGENT_PARENT_TRAJECTORY_ID` | unset | Optional parent trajectory id for nested/subagent workflows. |
+| `DYN_AGENT_TOOL_EVENTS_ZMQ_ENDPOINT` | unset | Dynamo-bound ZMQ PULL endpoint Pi connects to for tool events. |
 | `DYN_AGENT_TRACE_TOOL_ZMQ_ENDPOINT` | unset | Alias for the tool-event endpoint. |
 | `DYN_AGENT_TRACE_TOOL_EVENTS_ZMQ_ENDPOINT` | unset | Alias for the tool-event endpoint. |
 | `DYN_AGENT_TOOL_EVENTS_ZMQ_TOPIC` | `agent-tool-events` | ZMQ topic frame. |
@@ -299,7 +301,7 @@ These are the Dynamo variables most commonly needed for Pi traces. Exact launch 
 | `DYN_AGENT_TRACE_SINKS` | `jsonl` | Enables Dynamo agent trace sinks. |
 | `DYN_AGENT_TRACE_OUTPUT_PATH` | `/tmp/dynamo-agent-trace.jsonl` | JSONL trace output path. |
 | `DYN_AGENT_TRACE_JSONL_FLUSH_INTERVAL_MS` | `100` | Optional flush interval for faster interactive validation. |
-| `DYN_AGENT_TRACE_TOOL_EVENTS_ZMQ_ENDPOINT` | `tcp://127.0.0.1:20390` | ZMQ subscriber endpoint for Pi tool events. |
+| `DYN_AGENT_TRACE_TOOL_EVENTS_ZMQ_ENDPOINT` | `tcp://127.0.0.1:20390` | ZMQ PULL endpoint Dynamo binds for Pi tool events. |
 | `DYN_DISCOVERY_BACKEND` | `file` | File-backed local discovery; avoids etcd. |
 | `DYN_REQUEST_PLANE` | `tcp` | TCP request distribution from frontend to worker. |
 | `DYN_EVENT_PLANE` | `zmq` | ZMQ local event plane; avoids NATS. |
@@ -316,10 +318,10 @@ Every LLM request payload gets:
 {
   "nvext": {
     "agent_context": {
-      "workflow_type_id": "pi_coding_agent",
-      "workflow_id": "pi-demo-001",
-      "program_id": "<pi-session-id>",
-      "parent_program_id": "<optional-parent>",
+      "session_type_id": "pi_coding_agent",
+      "session_id": "pi-demo-001",
+      "trajectory_id": "<pi-session-id>",
+      "parent_trajectory_id": "<optional-parent>",
       "phase": "reasoning"
     }
   }
@@ -333,7 +335,7 @@ The extension preserves existing `nvext` fields and existing `nvext.agent_contex
 <details>
 <summary>Tool-event wire format</summary>
 
-When `DYN_AGENT_TOOL_EVENTS_ZMQ_ENDPOINT` or one of its aliases is configured, Pi publishes one multipart ZMQ message per tool event:
+When `DYN_AGENT_TOOL_EVENTS_ZMQ_ENDPOINT` or one of its aliases is configured, Pi connects a ZMQ PUSH socket and sends one multipart message per tool event:
 
 ```text
 [topic, seq_be_u64, msgpack(AgentTraceRecord)]
@@ -348,9 +350,9 @@ The decoded `AgentTraceRecord` uses Dynamo's agent trace schema:
   "event_time_unix_ms": 1777915663000,
   "event_source": "harness",
   "agent_context": {
-    "workflow_type_id": "pi_coding_agent",
-    "workflow_id": "pi-demo-001",
-    "program_id": "<pi-session-id>"
+    "session_type_id": "pi_coding_agent",
+    "session_id": "pi-demo-001",
+    "trajectory_id": "<pi-session-id>"
   },
   "tool": {
     "tool_call_id": "<pi-tool-call-id>",
@@ -448,7 +450,7 @@ Included:
 - OpenAI-compatible chat-completions path.
 - Model discovery from `/v1/models`.
 - Dynamo request metadata injection.
-- Pi session id as default `program_id`.
+- Pi session id as default `trajectory_id`.
 - Optional ZMQ tool-event relay into Dynamo traces.
 - Perfetto-compatible trace output through Dynamo's converter.
 

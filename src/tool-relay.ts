@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { encode } from "@msgpack/msgpack";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Publisher } from "zeromq";
+import { Push } from "zeromq";
 import type { DynamoEnvironment, DynamoProviderRuntimeConfig } from "./dynamo-provider.js";
 
 export const DEFAULT_TOOL_EVENTS_TOPIC = "agent-tool-events";
@@ -24,10 +24,10 @@ export interface DynamoToolRelayConfig {
 }
 
 export interface DynamoTraceAgentContext {
-	workflow_type_id: string;
-	workflow_id: string;
-	program_id: string;
-	parent_program_id?: string;
+	session_type_id: string;
+	session_id: string;
+	trajectory_id: string;
+	parent_trajectory_id?: string;
 }
 
 export type DynamoToolStatus = "running" | "succeeded" | "error" | "cancelled";
@@ -54,7 +54,7 @@ export interface DynamoAgentTraceRecord {
 }
 
 export interface ToolEventSocket {
-	bind(endpoint: string): Promise<void>;
+	connect(endpoint: string): Promise<void> | void;
 	send(frames: [Buffer, Buffer, Buffer]): Promise<void>;
 	close(): void;
 }
@@ -135,14 +135,14 @@ export function buildDynamoTraceAgentContext(
 	config: DynamoProviderRuntimeConfig,
 	sessionId: string | undefined,
 ): DynamoTraceAgentContext | undefined {
-	const programId = config.programId ?? sessionId;
-	if (!programId) return undefined;
+	const trajectoryId = config.trajectoryId ?? sessionId;
+	if (!trajectoryId) return undefined;
 
 	return {
-		workflow_type_id: config.workflowTypeId,
-		workflow_id: config.workflowId ?? programId,
-		program_id: programId,
-		...(config.parentProgramId ? { parent_program_id: config.parentProgramId } : {}),
+		session_type_id: config.sessionTypeId,
+		session_id: config.sessionId ?? trajectoryId,
+		trajectory_id: trajectoryId,
+		...(config.parentTrajectoryId ? { parent_trajectory_id: config.parentTrajectoryId } : {}),
 	};
 }
 
@@ -174,10 +174,10 @@ function createSequenceFrame(sequence: bigint): Buffer {
 	return frame;
 }
 
-export function createZeroMqPublisherSocket(): ToolEventSocket {
-	const socket = new Publisher({ sendHighWaterMark: DEFAULT_TOOL_EVENT_QUEUE_CAPACITY, linger: 0 });
+export function createZeroMqPushSocket(): ToolEventSocket {
+	const socket = new Push({ sendHighWaterMark: DEFAULT_TOOL_EVENT_QUEUE_CAPACITY, linger: 0 });
 	return {
-		bind: (endpoint) => socket.bind(endpoint),
+		connect: (endpoint) => socket.connect(endpoint),
 		send: (frames) => socket.send(frames),
 		close: () => socket.close(),
 	};
@@ -193,7 +193,7 @@ export class DynamoToolEventPublisher {
 
 	constructor(
 		private readonly config: DynamoToolRelayConfig,
-		socketFactory: ToolEventSocketFactory = createZeroMqPublisherSocket,
+		socketFactory: ToolEventSocketFactory = createZeroMqPushSocket,
 	) {
 		this.topicFrame = Buffer.from(config.topic, "utf8");
 		this.socket = socketFactory();
@@ -201,7 +201,7 @@ export class DynamoToolEventPublisher {
 
 	async start(): Promise<void> {
 		if (!this.config.endpoint) return;
-		await this.socket.bind(this.config.endpoint);
+		await this.socket.connect(this.config.endpoint);
 	}
 
 	publish(record: DynamoAgentTraceRecord): boolean {
@@ -316,7 +316,7 @@ export async function registerDynamoToolEventRelay(
 	pi: ExtensionAPI,
 	config: DynamoProviderRuntimeConfig,
 	relayConfig: DynamoToolRelayConfig = readDynamoToolRelayConfig(),
-	socketFactory: ToolEventSocketFactory = createZeroMqPublisherSocket,
+	socketFactory: ToolEventSocketFactory = createZeroMqPushSocket,
 ): Promise<DynamoToolEventRelay | undefined> {
 	if (!relayConfig.endpoint) return undefined;
 
