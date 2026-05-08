@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 import { Buffer } from "node:buffer";
 import { encode } from "@msgpack/msgpack";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
