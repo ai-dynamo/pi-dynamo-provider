@@ -21,6 +21,12 @@ on:
         required: false
         default: "main"
 
+# Cancel in-flight runs when a new commit lands on the same branch — saves
+# minutes of wasted CI time when iterating quickly on this file.
+concurrency:
+  group: integration-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   DYNAMO_TEST_MODEL_ID: "Qwen/Qwen3-0.6B"
 
@@ -76,6 +82,12 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Install system build deps
+        # protoc is required for the dynamo runtime's prost/tonic build scripts.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends protobuf-compiler
+
       - name: Clone Dynamo @ ${{ steps.dynamo.outputs.ref }}
         run: |
           git clone --depth 1 --branch "${{ steps.dynamo.outputs.ref }}" \
@@ -87,11 +99,18 @@ jobs:
           (cd dynamo && git log -1 --oneline)
 
       - name: Install Dynamo from source
+        # maturin develop requires an active virtualenv. Create one, activate
+        # it, then export it into $GITHUB_PATH so subsequent steps inherit the
+        # same python with dynamo importable.
         run: |
+          python -m venv "${GITHUB_WORKSPACE}/.dynamo-venv"
+          source "${GITHUB_WORKSPACE}/.dynamo-venv/bin/activate"
           python -m pip install --upgrade pip maturin
           (cd dynamo/lib/bindings/python && maturin develop --release)
           pip install -e ./dynamo
           python -c "import dynamo.frontend, dynamo.mocker; print('dynamo import ok')"
+          echo "${GITHUB_WORKSPACE}/.dynamo-venv/bin" >>"$GITHUB_PATH"
+          echo "VIRTUAL_ENV=${GITHUB_WORKSPACE}/.dynamo-venv" >>"$GITHUB_ENV"
 
       - name: Run integration smoke test
         env:
