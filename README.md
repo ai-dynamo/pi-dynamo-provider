@@ -486,6 +486,23 @@ export DYNAMO_BASE_URL=http://127.0.0.1:8000/v1
 pi -e ./src/index.ts --model dynamo/<model-id>
 ```
 
+## Continuous integration
+
+`.github/workflows/integration-smoke.yml` runs an end-to-end check that `nvext.agent_context` fields emitted by this package round-trip through Dynamo's actual frontend + mocker into the agent trace JSONL.
+
+- **Pull requests** run against a pinned Dynamo PyPI release (`PINNED_DYNAMO_VERSION` in the workflow). Stable: PR CI does not break when upstream is mid-refactor.
+- **Nightly cron** runs against `ai-dynamo/dynamo@main`. Failure opens (or comments on) an issue labeled `integration-smoke,upstream-drift` rather than blocking PRs.
+- **Manual dispatch** via `workflow_dispatch` accepts an arbitrary `dynamo_ref` (PyPI version or `git+...` ref) for ad-hoc validation.
+
+The smoke test exercises two cases:
+
+1. Top-level `agent_context` (`session_type_id`, `session_id`, `trajectory_id`) round-trips into the trace record verbatim.
+2. With `PI_SUBAGENT_CHILD=1` + bookkeeping vars exported, `readDynamoConfig` rewrites `trajectory_id` / `parent_trajectory_id` and the rewritten values land in the trace.
+
+Mocker output text is intentionally garbage — the harness never asserts on response content, only on the trace envelope. The full sequence (build provider → start frontend + mocker → POST one chat completion → read trace → assert) runs in ~60-90s on `ubuntu-latest`. Run locally with `./scripts/integration-smoke.sh` against any Python venv that has `ai-dynamo` installed.
+
+To bump the pinned Dynamo version: validate locally, edit `PINNED_DYNAMO_VERSION` in `.github/workflows/integration-smoke.yml`, ship a PR.
+
 ## Troubleshooting
 
 `/v1/models` is empty:
