@@ -488,20 +488,20 @@ pi -e ./src/index.ts --model dynamo/<model-id>
 
 ## Continuous integration
 
-`.github/workflows/integration-smoke.yml` runs an end-to-end check that `nvext.agent_context` fields emitted by this package round-trip through Dynamo's actual frontend + mocker into the agent trace JSONL.
-
-- **Pull requests** run against a pinned Dynamo PyPI release (`PINNED_DYNAMO_VERSION` in the workflow). Stable: PR CI does not break when upstream is mid-refactor.
-- **Nightly cron** runs against `ai-dynamo/dynamo@main`. Failure opens (or comments on) an issue labeled `integration-smoke,upstream-drift` rather than blocking PRs.
-- **Manual dispatch** via `workflow_dispatch` accepts an arbitrary `dynamo_ref` (PyPI version or `git+...` ref) for ad-hoc validation.
+`.github/workflows/integration-smoke.yml` runs an end-to-end check that `nvext.agent_context` fields emitted by this package round-trip through Dynamo's actual frontend + mocker into the agent trace JSONL. Every PR is tested against **`ai-dynamo/dynamo@main`** — this repo is a compatibility layer for one upstream, so head-of-tree on every PR is the correct coupling. A broken upstream legitimately blocks merges here.
 
 The smoke test exercises two cases:
 
 1. Top-level `agent_context` (`session_type_id`, `session_id`, `trajectory_id`) round-trips into the trace record verbatim.
 2. With `PI_SUBAGENT_CHILD=1` + bookkeeping vars exported, `readDynamoConfig` rewrites `trajectory_id` / `parent_trajectory_id` and the rewritten values land in the trace.
 
-Mocker output text is intentionally garbage — the harness never asserts on response content, only on the trace envelope. The full sequence (build provider → start frontend + mocker → POST one chat completion → read trace → assert) runs in ~60-90s on `ubuntu-latest`. Run locally with `./scripts/integration-smoke.sh` against any Python venv that has `ai-dynamo` installed.
+Mocker output text is intentionally garbage — the harness never asserts on response content, only on the trace envelope. Total job ~5-10 min cold, ~60-90s with cargo + HF caches warm. Manual `workflow_dispatch` accepts a `dynamo_ref` input for ad-hoc validation against a branch, tag, or SHA.
 
-To bump the pinned Dynamo version: validate locally, edit `PINNED_DYNAMO_VERSION` in `.github/workflows/integration-smoke.yml`, ship a PR.
+Run locally against an existing Dynamo install:
+
+```bash
+./scripts/integration-smoke.sh
+```
 
 ## Troubleshooting
 

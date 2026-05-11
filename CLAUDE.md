@@ -22,7 +22,7 @@ npm run build     # tsc -p tsconfig.build.json → dist/
 
 Tests live in `test/` as siblings of `src/`. Use vitest's `describe`/`it`/`expect`. Mirror the existing structure: one test file per source file, fixture data inline rather than separate fixture files.
 
-`test/integration/smoke.mjs` is the out-of-band end-to-end check — driven by `scripts/integration-smoke.sh`, not vitest. It boots Dynamo's frontend + mocker, sends one real chat completion, and asserts `nvext.agent_context` round-trips into the trace JSONL. Two cases: top-level agent_context and the pi-subagents bridge. Mocker output is garbage; assertions only target the trace envelope. CI shape: pinned Dynamo PyPI release for PRs, `ai-dynamo/dynamo@main` for nightly cron (opens an issue on failure rather than blocking). Bump `PINNED_DYNAMO_VERSION` in `.github/workflows/integration-smoke.yml` after manual validation against a newer release.
+`test/integration/smoke.mjs` is the out-of-band end-to-end check — driven by `scripts/integration-smoke.sh`, not vitest. It boots Dynamo's frontend + mocker, sends one real chat completion, and asserts `nvext.agent_context` round-trips into the trace JSONL. Two cases: top-level agent_context and the pi-subagents bridge. Mocker output is garbage; assertions only target the trace envelope. CI clones `ai-dynamo/dynamo@main` and builds from source on every PR — head-of-tree is the correct coupling for a compatibility layer, even though it means broken upstream blocks merges here. `workflow_dispatch` accepts a `dynamo_ref` input for ad-hoc validation against a specific branch, tag, or SHA.
 
 ## Coding standards
 
