@@ -410,6 +410,34 @@ pi --model dynamo/<model-id> -p "..."
 
 That's it. When pi-subagents spawns a child, the bridge fires automatically — no extra plumbing on the pi-subagents side, and no modifications to your subagent prompts. Trace records emitted by the child will carry `parent_trajectory_id` set to the orchestrator's id, and offline tooling can reconstruct the agent tree from the `(session_id, trajectory_id, parent_trajectory_id)` triple alone.
 
+### Prerequisites for the bridge to fire
+
+The bridge runs inside the child Pi process. For child trace records to actually reach Dynamo, two things have to be true. Both can silently break the chain in non-interactive `-p` flows, so check them before debugging the bridge itself.
+
+1. **`pi` must be on `PATH`.** pi-subagents spawns the child with `spawn("pi", ...)` (see `pi-spawn.ts`). If your Pi install lives under `node_modules/.bin`, export that directory on `PATH` before launching the orchestrator. Otherwise every subagent dispatch fails immediately — pi-subagents' `~/.pi/agent/run-history.jsonl` records `status: error, exit: 1` after 0–7s — the orchestrator silently falls back to doing the work itself, and the trace looks like 100% orchestrator records.
+
+   ```bash
+   export PATH=/path/to/node_modules/.bin:$PATH
+   pi --model dynamo/<model-id> -p "..."
+   ```
+
+2. **Children must resolve to the `dynamo` provider.** pi-subagents does not thread the parent's `--model` to child Pi processes today (`subagent-executor.ts` only forwards `params.model ?? agentConfig.model`). With no `--model` on the child command line, Pi falls through `findInitialModel` to its own default — which can land on any other registered provider (e.g. `huggingface`). The bridge will still rewrite the trajectory id, but the child's LLM request never reaches Dynamo, so no child trace record is ever written.
+
+   The simplest fix is to make the parent's model the saved default so children inherit it through Pi's settings:
+
+   ```bash
+   python3 -c "
+   import json, pathlib
+   p = pathlib.Path.home() / '.pi/agent/settings.json'
+   d = json.loads(p.read_text())
+   d['defaultProvider'] = 'dynamo'
+   d['defaultModel'] = '<model-id>'   # e.g. zai-org/GLM-4.7-Flash
+   p.write_text(json.dumps(d, indent=2) + chr(10))
+   "
+   ```
+
+   The on-disk key is `defaultModel`, not `defaultModelId` (the latter is the SDK option name in pi's `sdk.js`). Alternatively, pin `model: dynamo/<model-id>` in the frontmatter of each pi-subagents agent `.md` you intend to use.
+
 ### Behavior summary
 
 | Situation | trajectory_id emitted | parent_trajectory_id emitted |
