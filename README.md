@@ -408,24 +408,7 @@ export DYN_AGENT_TRAJECTORY_ID="${DYN_AGENT_SESSION_ID}:orchestrator"
 pi --model dynamo/<model-id> -p "..."
 ```
 
-That's it. When pi-subagents spawns a child, the bridge fires automatically — no extra plumbing on the pi-subagents side, and no modifications to your subagent prompts. Trace records emitted by the child will carry `parent_trajectory_id` set to the orchestrator's id, and offline tooling can reconstruct the agent tree from the `(session_id, trajectory_id, parent_trajectory_id)` triple alone.
-
-### Prerequisites for the bridge to fire
-
-Two things have to be true for child trace records to reach Dynamo. If either is wrong, the orchestrator silently falls back to in-process work and the trace looks like 100% orchestrator records — easy to mistake for a bridge bug.
-
-**1. `pi` must be on `PATH`.** pi-subagents spawns each child by invoking `pi`, so the binary needs to be resolvable. If you installed Pi locally, put `node_modules/.bin` on `PATH` before launching the orchestrator:
-
-```bash
-export PATH=/path/to/node_modules/.bin:$PATH
-pi --model dynamo/<model-id> -p "..."
-```
-
-If this is wrong, every subagent dispatch exits 1 immediately. Confirm via `~/.pi/agent/run-history.jsonl`.
-
-**2. Children must use the `dynamo` provider.** pi-subagents does not currently thread the parent's `--model` down to child Pi processes — children pick whatever Pi's default model resolution lands on, which usually isn't Dynamo. The bridge still rewrites the trajectory id, but the LLM call never reaches Dynamo, so no child record is written.
-
-Make Dynamo the saved default in `~/.pi/agent/settings.json`:
+One caveat: pi-subagents does not currently thread the parent's `--model` down to child Pi processes, so children fall through to Pi's default model resolution, which usually isn't Dynamo. The bridge still rewrites the trajectory id, but the LLM call never reaches Dynamo and no child trace record is written. Make Dynamo the saved default in `~/.pi/agent/settings.json` so children pick it up:
 
 ```json
 {
@@ -434,7 +417,9 @@ Make Dynamo the saved default in `~/.pi/agent/settings.json`:
 }
 ```
 
-The settings key is `defaultModel` (not `defaultModelId`). Alternatively, pin `model: dynamo/<model-id>` in the frontmatter of each pi-subagents agent's `.md`.
+(The settings key is `defaultModel`, not `defaultModelId`. Alternatively, pin `model: dynamo/<model-id>` in the frontmatter of each pi-subagents agent's `.md`.)
+
+When pi-subagents spawns a child, the bridge fires automatically — no extra plumbing on the pi-subagents side, and no modifications to your subagent prompts. Trace records emitted by the child will carry `parent_trajectory_id` set to the orchestrator's id, and offline tooling can reconstruct the agent tree from the `(session_id, trajectory_id, parent_trajectory_id)` triple alone.
 
 ### Behavior summary
 
