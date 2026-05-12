@@ -116,6 +116,14 @@ jobs:
           SMOKE_KEEP_LOGS: "1"
         run: ./scripts/integration-smoke.sh
 
+      - name: Upload trace JSONL on success
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynamo-smoke-trace-${{ github.run_id }}
+          path: /tmp/pi-dynamo-smoke-*/*.jsonl
+          retention-days: 1
+
       - name: Upload Dynamo logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -124,4 +132,4 @@ jobs:
           path: |
             /tmp/pi-dynamo-smoke-*/*.log
             /tmp/pi-dynamo-smoke-*/*.jsonl
-          retention-days: 7
+          retention-days: 1
