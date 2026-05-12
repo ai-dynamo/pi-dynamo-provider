@@ -40,10 +40,19 @@ jobs:
 
       - name: Resolve Dynamo ref
         id: dynamo
+        # Capture both the ref label and the resolved HEAD SHA. The SHA goes
+        # into the cargo cache key so each new dynamo HEAD gets a fresh exact
+        # key (preventing cache staleness as upstream moves forward); the ref
+        # label drives restore-keys for partial-warmth fallback from any prior
+        # SHA on the same ref.
         run: |
           ref="${{ inputs.dynamo_ref }}"
           ref="${ref:-main}"
+          sha=$(git ls-remote https://github.com/ai-dynamo/dynamo.git "${ref}" | awk '{print $1}' | head -c 12)
+          if [[ -z "${sha}" ]]; then sha="$(echo "${ref}" | tr -c '[:alnum:]' '-')"; fi
           echo "ref=${ref}" >>"$GITHUB_OUTPUT"
+          echo "sha=${sha}" >>"$GITHUB_OUTPUT"
+          echo "Resolved ${ref} -> ${sha}"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -68,8 +77,13 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             dynamo/target
-          key: cargo-${{ runner.os }}-${{ steps.dynamo.outputs.ref }}
+          # Exact key includes the resolved dynamo SHA so every upstream HEAD
+          # gets its own cache entry. Restore-keys falls back to any prior SHA
+          # on the same ref (cargo incremental still gets most of the benefit
+          # from a near-neighbor build), then to any prior build for this OS.
+          key: cargo-${{ runner.os }}-${{ steps.dynamo.outputs.ref }}-${{ steps.dynamo.outputs.sha }}
           restore-keys: |
+            cargo-${{ runner.os }}-${{ steps.dynamo.outputs.ref }}-
             cargo-${{ runner.os }}-
 
       - name: Cache HuggingFace tokenizer
