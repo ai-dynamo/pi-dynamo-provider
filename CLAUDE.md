@@ -22,6 +22,8 @@ npm run build     # tsc -p tsconfig.build.json → dist/
 
 Tests live in `test/` as siblings of `src/`. Use vitest's `describe`/`it`/`expect`. Mirror the existing structure: one test file per source file, fixture data inline rather than separate fixture files.
 
+`test/integration/smoke.mjs` is the out-of-band end-to-end check — driven by `scripts/integration-smoke.sh`, not vitest. It boots Dynamo's frontend + mocker, sends one real chat completion, and asserts `nvext.agent_context` round-trips into the trace JSONL. Two cases: top-level agent_context and the pi-subagents bridge. Mocker output is garbage; assertions only target the trace envelope. CI clones `ai-dynamo/dynamo@main` and builds from source — published wheels lag behind the agent trace sink surface, so the wheel path can't actually exercise this package. Cargo cache keeps warm runs ~60-90s, cold ~10 min. `workflow_dispatch` accepts a `dynamo_ref` input for ad-hoc validation against a specific branch, tag, or SHA.
+
 ## Coding standards
 
 - TypeScript strict mode. Don't add `any`; prefer `unknown` + narrow.

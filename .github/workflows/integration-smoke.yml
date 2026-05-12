@@ -1,0 +1,149 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: integration-smoke
+
+# End-to-end check that nvext.agent_context fields emitted by this package
+# round-trip through Dynamo's actual frontend + mocker into the agent trace
+# sink. Builds Dynamo from ai-dynamo/dynamo@main on every run — published
+# wheels lag behind features (e.g. the agent_trace sink), so we need source
+# builds to test the surface this package actually depends on. Cargo cache
+# keeps warm-runs in the ~60-90s range; cold runs ~10 min.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dynamo_ref:
+        description: "ai-dynamo/dynamo git ref (branch, tag, or SHA). Defaults to main."
+        required: false
+        default: "main"
+
+concurrency:
+  group: integration-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DYNAMO_TEST_MODEL_ID: "Qwen/Qwen3-0.6B"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve Dynamo ref
+        id: dynamo
+        # Capture both the ref label and the resolved HEAD SHA. The SHA goes
+        # into the cargo cache key so each new dynamo HEAD gets a fresh exact
+        # key (preventing cache staleness as upstream moves forward); the ref
+        # label drives restore-keys for partial-warmth fallback from any prior
+        # SHA on the same ref.
+        run: |
+          ref="${{ inputs.dynamo_ref }}"
+          ref="${ref:-main}"
+          sha=$(git ls-remote https://github.com/ai-dynamo/dynamo.git "${ref}" | awk '{print $1}' | head -c 12)
+          if [[ -z "${sha}" ]]; then sha="$(echo "${ref}" | tr -c '[:alnum:]' '-')"; fi
+          echo "ref=${ref}" >>"$GITHUB_OUTPUT"
+          echo "sha=${sha}" >>"$GITHUB_OUTPUT"
+          echo "Resolved ${ref} -> ${sha}"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            dynamo/target
+          # Exact key includes the resolved dynamo SHA so every upstream HEAD
+          # gets its own cache entry. Restore-keys falls back to any prior SHA
+          # on the same ref (cargo incremental still gets most of the benefit
+          # from a near-neighbor build), then to any prior build for this OS.
+          key: cargo-${{ runner.os }}-${{ steps.dynamo.outputs.ref }}-${{ steps.dynamo.outputs.sha }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ steps.dynamo.outputs.ref }}-
+            cargo-${{ runner.os }}-
+
+      - name: Cache HuggingFace tokenizer
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-tokenizer-${{ env.DYNAMO_TEST_MODEL_ID }}
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install system build deps
+        # protoc is required for the dynamo runtime's prost/tonic build scripts.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends protobuf-compiler
+
+      - name: Clone Dynamo @ ${{ steps.dynamo.outputs.ref }}
+        run: |
+          git clone --depth 1 --branch "${{ steps.dynamo.outputs.ref }}" \
+            https://github.com/ai-dynamo/dynamo.git dynamo \
+            || git clone https://github.com/ai-dynamo/dynamo.git dynamo
+          if [[ "${{ steps.dynamo.outputs.ref }}" != "main" ]]; then
+            (cd dynamo && git fetch --depth 1 origin "${{ steps.dynamo.outputs.ref }}" && git checkout FETCH_HEAD)
+          fi
+          (cd dynamo && git log -1 --oneline)
+
+      - name: Install Dynamo from source
+        # maturin develop requires an active virtualenv. Create one, activate
+        # it, then export it into $GITHUB_PATH so subsequent steps inherit the
+        # same python with dynamo importable.
+        run: |
+          python -m venv "${GITHUB_WORKSPACE}/.dynamo-venv"
+          source "${GITHUB_WORKSPACE}/.dynamo-venv/bin/activate"
+          python -m pip install --upgrade pip maturin
+          (cd dynamo/lib/bindings/python && maturin develop --release)
+          pip install -e ./dynamo
+          python -c "import dynamo.frontend, dynamo.mocker; print('dynamo import ok')"
+          echo "${GITHUB_WORKSPACE}/.dynamo-venv/bin" >>"$GITHUB_PATH"
+          echo "VIRTUAL_ENV=${GITHUB_WORKSPACE}/.dynamo-venv" >>"$GITHUB_ENV"
+
+      - name: Run integration smoke test
+        env:
+          SMOKE_KEEP_LOGS: "1"
+        run: ./scripts/integration-smoke.sh
+
+      - name: Upload trace JSONL on success
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynamo-smoke-trace-${{ github.run_id }}
+          path: /tmp/pi-dynamo-smoke-*/*.jsonl
+          retention-days: 1
+
+      - name: Upload Dynamo logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynamo-smoke-logs-${{ github.run_id }}
+          path: |
+            /tmp/pi-dynamo-smoke-*/*.log
+            /tmp/pi-dynamo-smoke-*/*.jsonl
+          retention-days: 1
