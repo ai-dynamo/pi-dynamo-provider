@@ -126,6 +126,21 @@ npm run build   # -> dist/
 
 `scripts/integration-smoke.sh` boots Dynamo's frontend + mocker and asserts `x-dynamo-session-id` becomes `session_id` in the trace; it is the out-of-band end-to-end check.
 
+## Harbor
+
+Upstream Harbor's built-in Pi adapter does not install external Pi providers and runs Pi with `--no-session`. Use `harbor_dynamo_pi:DynamoPi` from this checkout instead. It installs this provider from a read-only mount and maps Harbor's per-trial `agent.session_id` to `DYN_AGENT_SESSION_ID`; each Harbor trial therefore has one stable Dynamo session for all of its turns.
+
+```bash
+export PYTHONPATH=/absolute/path/to/agent-plugins/pi-plugin${PYTHONPATH:+:$PYTHONPATH}
+harbor run \
+  --agent harbor_dynamo_pi:DynamoPi \
+  --model dynamo/<model-id> \
+  --agent-env DYNAMO_BASE_URL=http://<dynamo-host>:8000/v1 \
+  --mounts '[{"type":"bind","source":"/absolute/path/to/agent-plugins/pi-plugin","target":"/opt/pi-dynamo-provider","read_only":true}]'
+```
+
+The full Dynamo + SWE-bench launch sequence is documented in Dynamo's ThunderAgent guide.
+
 ## Troubleshooting
 
 - **`/v1/models` empty** — wait for the backend to load; confirm frontend and worker share the same discovery/request/event planes and `DYN_FILE_KV`.
