@@ -95,11 +95,11 @@ describe("light provider", () => {
 		});
 	});
 
-	it("sends a best-effort terminal session header", async () => {
+	it("sends a best-effort terminal session header when request tracing is disabled", async () => {
 		let url: string | URL | Request | undefined;
 		let init: RequestInit | undefined;
 		const sent = await sendDynamoSessionFinal(
-			config,
+			{ ...config, traceEnabled: false },
 			"test-model",
 			"pi-session",
 			() => "request-final",

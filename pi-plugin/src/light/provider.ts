@@ -177,7 +177,7 @@ export async function sendDynamoSessionFinal(
 	fetchImpl: typeof fetch = fetch,
 ): Promise<boolean> {
 	const sessionId = config.sessionId ?? runtimeSessionId?.trim();
-	if (!config.traceEnabled || !sessionId) return false;
+	if (!sessionId) return false;
 
 	try {
 		const response = await fetchImpl(`${config.baseUrl}/chat/completions`, {
