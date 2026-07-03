@@ -29,12 +29,14 @@ export interface DynamoEnvironment extends DynamoSessionEnvironment {
 	DYNAMO_BASE_URL?: string;
 	OPENAI_BASE_URL?: string;
 	DYNAMO_API_KEY?: string;
+	DYN_AGENT_SESSION_FINAL?: string;
 }
 
 export interface DynamoConfig {
 	baseUrl: string;
 	apiKey: string;
 	traceEnabled: boolean;
+	sessionFinalEnabled?: boolean;
 	sessionId?: string;
 	parentSessionId?: string;
 }
@@ -69,6 +71,9 @@ export function readDynamoConfig(env: DynamoEnvironment = process.env): DynamoCo
 		baseUrl: normalizeDynamoBaseUrl(envValue(env, "DYNAMO_BASE_URL") ?? envValue(env, "OPENAI_BASE_URL")),
 		apiKey: envValue(env, "DYNAMO_API_KEY") ?? DEFAULT_DYNAMO_API_KEY,
 		traceEnabled: isTruthyEnv(envValue(env, "DYN_REQUEST_TRACE")),
+		sessionFinalEnabled:
+			envValue(env, "DYN_AGENT_SESSION_FINAL") === undefined ||
+			isTruthyEnv(envValue(env, "DYN_AGENT_SESSION_FINAL")),
 		...(session.sessionId ? { sessionId: session.sessionId } : {}),
 		...(session.parentSessionId ? { parentSessionId: session.parentSessionId } : {}),
 	};
@@ -177,7 +182,7 @@ export async function sendDynamoSessionFinal(
 	fetchImpl: typeof fetch = fetch,
 ): Promise<boolean> {
 	const sessionId = config.sessionId ?? runtimeSessionId?.trim();
-	if (!sessionId) return false;
+	if (config.sessionFinalEnabled === false || !sessionId) return false;
 
 	try {
 		const response = await fetchImpl(`${config.baseUrl}/chat/completions`, {

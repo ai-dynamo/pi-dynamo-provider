@@ -18,7 +18,7 @@ latest published Pi packages.
 - **Subagent session ids** — gives each [pi-subagents](https://github.com/nicobailon/pi-subagents) child its own session id. See [Subagent session ids](#subagent-session-ids).
 - **Tool-event relay** — optionally pushes Pi `tool_start` / `tool_end` / `tool_error` events to Dynamo over ZMQ so one trace shows LLM spans and tool spans together.
 
-Session headers are always sent when Pi provides a session id; `DYN_REQUEST_TRACE` gates only tool-event relay and the best-effort terminal trace request. Headers carry identity only; they do not activate sticky or session-aware routing.
+Session headers are always sent when Pi provides a session id; `DYN_REQUEST_TRACE` gates only the optional tool-event relay. Headers carry identity only; they do not activate sticky or session-aware routing.
 
 ## Install
 
@@ -71,9 +71,10 @@ The only required setting is the connection (`DYNAMO_BASE_URL`). Everything belo
 | --- | --- | --- |
 | `DYNAMO_BASE_URL` | `http://127.0.0.1:8000/v1` | Dynamo endpoint root (falls back to `OPENAI_BASE_URL`). |
 | `DYNAMO_API_KEY` | `dynamo-local` | Bearer token. |
-| `DYN_REQUEST_TRACE` | off | Enables the optional tool relay and best-effort terminal trace request. Dynamo itself owns request-trace capture. |
+| `DYN_REQUEST_TRACE` | off | Enables the optional tool relay. Dynamo itself owns request-trace capture. |
 | `DYN_AGENT_SESSION_ID` | unset | Optional parent session seed for [session linking](#session-linking) in subagents. |
 | `DYN_AGENT_PARENT_SESSION_ID` | unset | Parent session; set manually to override the bridge. |
+| `DYN_AGENT_SESSION_FINAL` | on | Sends a terminal session control request. Disable for endpoints without a lifecycle consumer, including a plain KV-routing baseline. |
 | `DYN_REQUEST_TRACE_TOOL_EVENTS_ZMQ_ENDPOINT` | unset | Dynamo-bound ZMQ PULL endpoint for the tool relay. |
 
 `PI_SUBAGENT_CHILD` / `PI_SUBAGENT_RUN_ID` / `PI_SUBAGENT_CHILD_AGENT` / `PI_SUBAGENT_CHILD_INDEX` are **read, never set** — pi-subagents populates them and the provider uses them to derive the child `session_id` and parent link.
@@ -128,7 +129,7 @@ npm run build   # -> dist/
 
 ## Harbor
 
-Upstream Harbor's built-in Pi adapter does not install external Pi providers and runs Pi with `--no-session`. Use `harbor_dynamo_pi:DynamoPi` from this checkout instead. It installs this provider from a read-only mount and maps Harbor's per-trial `agent.session_id` to `DYN_AGENT_SESSION_ID`; each Harbor trial therefore has one stable Dynamo session for all of its turns.
+Upstream Harbor's built-in Pi adapter does not install external Pi providers and runs Pi with `--no-session`. Use `harbor_dynamo_pi:DynamoPi` from this checkout instead. It installs this provider from a read-only mount, maps Harbor's per-trial `agent.session_id` to `DYN_AGENT_SESSION_ID`, and closes the session at Harbor's trial boundary. Each Harbor trial therefore has one stable Dynamo session for all of its turns. Set `DYN_AGENT_SESSION_FINAL=0` for a plain KV-routing baseline so the terminal control body is not forwarded as model work.
 
 ```bash
 export PYTHONPATH=/absolute/path/to/agent-plugins/pi-plugin${PYTHONPATH:+:$PYTHONPATH}

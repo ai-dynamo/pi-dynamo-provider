@@ -120,6 +120,23 @@ describe("light provider", () => {
 		expect(JSON.parse(init?.body as string)).toMatchObject({ model: "test-model", max_tokens: 1, stream: false });
 	});
 
+	it("skips the terminal request when session finalization is disabled", async () => {
+		let calls = 0;
+		const sent = await sendDynamoSessionFinal(
+			{ ...config, sessionFinalEnabled: false },
+			"test-model",
+			"pi-session",
+			undefined,
+			async () => {
+				calls += 1;
+				return { ok: true } as Response;
+			},
+		);
+
+		expect(sent).toBe(false);
+		expect(calls).toBe(0);
+	});
+
 	it("bridges pi-subagents through Dynamo session headers", () => {
 		const env: NodeJS.ProcessEnv = {
 			DYN_REQUEST_TRACE: "0",
