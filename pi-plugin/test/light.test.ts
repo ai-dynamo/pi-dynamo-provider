@@ -117,6 +117,7 @@ describe("light provider", () => {
 			"x-dynamo-session-id": "pi-session",
 			"x-dynamo-session-final": "true",
 		});
+		expect(init?.signal).toBeUndefined();
 		expect(JSON.parse(init?.body as string)).toMatchObject({ model: "test-model", max_tokens: 1, stream: false });
 	});
 
