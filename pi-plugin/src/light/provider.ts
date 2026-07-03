@@ -198,6 +198,7 @@ export async function sendDynamoSessionFinal(
 				max_tokens: 1,
 				stream: false,
 			}),
+			signal: AbortSignal.timeout(5000),
 		});
 		return response.ok;
 	} catch {
