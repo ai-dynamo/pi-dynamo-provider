@@ -31,7 +31,7 @@ cd pi-plugin
 pi -e ./src/index.ts --model dynamo/<model-id>
 ```
 
-## Quick start
+## Configure
 
 Point Pi at a running Dynamo endpoint:
 
@@ -42,7 +42,7 @@ export DYNAMO_API_KEY=dummy        # local Dynamo usually ignores this; defaults
 pi --model dynamo/<model-id> -p "Reply exactly ok."
 ```
 
-That's the whole required setup. Everything else is only set when you want to override it — see [Configuration](#configuration).
+That's the whole required setup. Everything else is only set when you want to override it — see [Configuration reference](#configuration-reference).
 
 ## Subagent session ids
 
@@ -63,7 +63,7 @@ sequenceDiagram
 
 > ZMQ tool records can include parent/child **session ids** when `DYN_AGENT_SESSION_ID` is set on the root. See [Session linking](#session-linking).
 
-## Configuration
+### Configuration reference
 
 The only required setting is the connection (`DYNAMO_BASE_URL`). Everything below is optional.
 
@@ -116,7 +116,7 @@ cd pi-plugin
 ./scripts/launch-agg-agent.sh -- --disable-cuda-graph   # forward flags to dynamo.sglang
 ```
 
-## Development
+## Validate
 
 ```bash
 npm install
@@ -127,20 +127,9 @@ npm run build   # -> dist/
 
 `scripts/integration-smoke.sh` boots Dynamo's frontend + mocker and asserts `x-dynamo-session-id` becomes `session_id` in the trace; it is the out-of-band end-to-end check.
 
-## Harbor
+## Harbor adapter
 
-Upstream Harbor's built-in Pi adapter does not install external Pi providers and runs Pi with `--no-session`. Use `harbor_dynamo_pi:DynamoPi` from this checkout instead. It installs this provider from a read-only mount, maps Harbor's per-trial `agent.session_id` to `DYN_AGENT_SESSION_ID`, and closes the session at Harbor's trial boundary. Each Harbor trial therefore has one stable Dynamo session for all of its turns. Set `DYN_AGENT_SESSION_FINAL=0` for a plain KV-routing baseline so the terminal control body is not forwarded as model work.
-
-```bash
-export PYTHONPATH=/absolute/path/to/agent-plugins/pi-plugin${PYTHONPATH:+:$PYTHONPATH}
-harbor run \
-  --agent harbor_dynamo_pi:DynamoPi \
-  --model dynamo/<model-id> \
-  --agent-env DYNAMO_BASE_URL=http://<dynamo-host>:8000/v1 \
-  --mounts '[{"type":"bind","source":"/absolute/path/to/agent-plugins/pi-plugin","target":"/opt/pi-dynamo-provider","read_only":true}]'
-```
-
-The full Dynamo + SWE-bench launch sequence is documented in Dynamo's ThunderAgent guide.
+The Harbor adapter and host-network overlay live in [`harbor/`](harbor/). See its [README](harbor/README.md) for usage.
 
 ## Troubleshooting
 

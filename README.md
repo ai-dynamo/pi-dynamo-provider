@@ -1,11 +1,15 @@
 # Dynamo Agent Plugins
 
-Small agent integrations for Dynamo request tracing.
+Small agent integrations that send session identity to Dynamo.
 
-## Layout
+## Plugins
 
-- `pi-plugin/` - Pi provider plugin for Dynamo's OpenAI-compatible endpoint.
-- `hermes-plugin/` - Hermes middleware plugin that maps Hermes `session_id` to `x-dynamo-session-id`.
-- `openclaw-plugin/` - OpenClaw provider plugin that maps OpenClaw `sessionId` to `x-dynamo-session-id`.
+- [`pi-plugin/`](pi-plugin/) - Pi provider for Dynamo's OpenAI-compatible endpoint.
+- [`hermes-plugin/`](hermes-plugin/) - Hermes middleware that maps Hermes `session_id` to `x-dynamo-session-id`.
+- [`openclaw-plugin/`](openclaw-plugin/) - OpenClaw provider that maps OpenClaw `sessionId` to `x-dynamo-session-id`.
 
-Each plugin owns its own tests and install instructions.
+Each plugin owns its install, configuration, and validation instructions.
+
+## Harbor adapters
+
+Harbor-specific integration files live with the plugin they adapt. The Pi adapter is in [`pi-plugin/harbor/`](pi-plugin/harbor/).

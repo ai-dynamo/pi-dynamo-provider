@@ -1,12 +1,15 @@
 # OpenClaw Dynamo Provider
 
-OpenClaw provider plugin that copies the current OpenClaw `sessionId` into
-`x-dynamo-session-id` on each request sent through the `dynamo` provider. Native
-subagents also send their immediate parent's ID in `x-dynamo-parent-session-id`.
+OpenClaw provider plugin that copies the current OpenClaw `sessionId` into `x-dynamo-session-id` on each request sent through the `dynamo` provider. Native subagents also send their immediate parent's ID in `x-dynamo-parent-session-id`.
 
-Live Dynamo integration is tested with OpenClaw `2026.6.8`. CI runs the real
-OpenClaw agent loop on both `2026.6.8` and the latest release, forcing a native
-subagent and asserting stable root plus exact child/parent request headers.
+Live Dynamo integration is tested with OpenClaw `2026.6.8`. CI runs the real OpenClaw agent loop on both `2026.6.8` and the latest release, forcing a native subagent and asserting stable root plus exact child/parent request headers.
+
+## What it does
+
+- Registers the `dynamo` provider.
+- Adds stable root and child session headers.
+- Links native subagents to their immediate parent session.
+- Preserves explicitly supplied Dynamo session headers.
 
 ## Install
 
@@ -48,8 +51,7 @@ Add a Dynamo-backed model to `~/.openclaw/openclaw.json`:
 }
 ```
 
-The plugin preserves an explicitly supplied `x-dynamo-session-id`. Session
-headers carry identity only; they do not enable sticky routing.
+Session headers carry identity only; they do not enable sticky routing.
 
 ## Validate
 

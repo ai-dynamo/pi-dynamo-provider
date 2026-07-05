@@ -9,11 +9,14 @@ Repo layout:
 
 - `pi-plugin/` — Pi extension registering a `dynamo` provider for Dynamo's OpenAI-compatible chat-completions endpoint.
 - `hermes-plugin/` — Hermes middleware plugin that injects Dynamo session headers from Hermes `session_id`.
+- `openclaw-plugin/` — OpenClaw provider plugin that injects root and parent Dynamo session headers.
+- `pi-plugin/harbor/` — Harbor adapter and host-network overlay for running the Pi plugin in Harbor task containers.
 
-The Pi plugin has three source files under `pi-plugin/src/`:
+The Pi plugin implementation lives under `pi-plugin/src/`:
 
 - `index.ts` — thin re-export of the light implementation.
 - `src/light/provider.ts` — config + streamSimple wrapper. Reads `DYN_REQUEST_TRACE`, `DYN_AGENT_*`, and `PI_SUBAGENT_*` env vars. Always stamps `x-dynamo-session-id` / parent headers when Pi provides a session and leaves Pi `sessionId` untouched.
+- `src/light/session.ts` — resolves root, child, and parent session identity from Pi and pi-subagents environment state.
 - `src/light/tool-relay.ts` — ZMQ PUSH publisher for Pi tool events. Connects to a Dynamo-bound PULL endpoint. Wire format: `[topic, seq_be_u64, msgpack(RequestTraceRecord)]`.
 
 ## Build, test, check
@@ -73,7 +76,7 @@ Don't introduce new prefixes. If you need a new var, justify which existing name
 - Feature branches as `<username>/<short-name>`, forked from `main`.
 - DCO sign-off required: `git commit -s` (the `Signed-off-by:` trailer).
 - Use HEREDOCs for multi-line commit messages so formatting survives.
-- Co-authored-by Claude trailers are fine and welcomed when applicable.
+- Do not add assistant attribution or co-author trailers.
 - Don't bypass hooks (`--no-verify`) unless explicitly asked.
 - Push to a remote branch, open a PR with a `Test plan` checklist (see PR #1 for the template).
 
