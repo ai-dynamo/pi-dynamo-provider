@@ -20,6 +20,8 @@ latest published Pi packages.
 
 Session headers are always sent when Pi provides a session id; `DYN_REQUEST_TRACE` gates only the optional tool-event relay. Headers carry identity only; they do not activate sticky or session-aware routing.
 
+The provider does not send a terminal-session request when Pi exits. Dynamo policies own session expiry.
+
 ## Install
 
 ```bash
